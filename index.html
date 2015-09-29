@@ -1,0 +1,293 @@
+<html>
+  <head>
+    <title>BPS Map Test</title>
+    <meta name="viewport" content="initial-scale=1.0, user-scalable=no" />
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/2.1.4/jquery.min.js"></script>
+    <script src="https://maps.googleapis.com/maps/api/js"></script>
+    <script src="https://d26b395fwzu5fz.cloudfront.net/3.2.6/keen.min.js" type="text/javascript"></script>
+    <!--
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/foundation/5.5.2/css/foundation.min.css"></link>
+    <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/foundation/5.5.2/js/foundation.min.js"></script>
+   -->
+   <script type="text/javascript">
+  var client = new Keen({
+    projectId: "55c6447596773d704c91e556", // String (required always)
+    writeKey: "20522e41d21796c46e5dc23896f72ccec3af1d330bc6e9613647fd14b8e7f437bfc182f976a732ba2a642d49c54ea748533746d95e66cdbedc32891f360ae3507aa4b3761fcef25b6acb6fabf1044fc6f349931a8b43a03b036d678f5a0ac5db1815848aae11f9408ed749d0d45414f0",   // String (required for sending data)
+  });
+
+
+  $(function() {
+    client.addEvent("page-load", {
+  "user_agent" : "${keen.user_agent}",
+  "ip_address" : "${keen.ip}",
+  "page_url" : window.location.href,
+  "keen" : {
+    "addons" : [
+      {
+        "name" : "keen:ua_parser",
+        "input" : {
+          "ua_string" : "user_agent"
+        },
+        "output" : "parsed_user_agent"
+      },
+      {
+        "name" : "keen:ip_to_geo",
+        "input" : {
+          "ip" : "ip_address"
+        },
+        "output" : "ip_geo_info"
+      },
+      {
+        "name" : "keen:url_parser",
+        "input" : {
+          "url" : "page_url"
+        },
+        "output" : "parsed_page_url"
+      }
+    ]
+  }
+    });
+  });
+
+</script>
+
+    <style media="screen">
+    #panel {
+      position: absolute;
+      top: 10px;
+      left: 50%;
+      margin-left: -150px;
+      z-index: 5;
+      background-color: #fff;
+      opacity: .9;
+      padding: 5px;
+      border: 1px solid #999;
+    }
+    #message {
+      opacity: 0.99;
+      position:absolute;
+      /*top: 10px;*/
+      /*left: 10px;*/
+      top:100%;
+      border: 1px solid #eee;
+      background-color: #fff;
+      padding: 1em 0 1em 0;
+      text-align: center;
+      margin:0;
+      z-index: 1;
+    }
+    </style>
+
+  </head>
+  <body>
+
+  <div id="panel">
+    <input id="address" type="textbox" value="Techartista, 4818 WASHINGTON BOULEVARD, ST. LOUIS, MO">
+    <input type="button" value="Start" onclick="codeAddress()">
+    <!-- <div>
+      Steps <input id="steps" type="textbox" value="6" size="2">
+      Min <input id="min" type="textbox" value="0.001" size="4">
+      Max <input id="max" type="textbox" value="0.01" size="3">
+    </div> -->
+    <!--
+    <input id="start" type="textbox" onchange="calcRoute();" placeholder="start">
+    <input id="end" type="textbox" onchange="calcRoute();" placeholder="end">
+   -->
+  </div>
+
+  <div id="map-canvas">
+  </div>
+
+  <div id="message" style="display:none;">
+    <h2>Abandoned</h2>
+    <p>
+      Sorry
+    </p>
+    <a href="#" onclick="location.reload();">Retry</a>
+  </div>
+
+  <script>
+
+  Array.prototype.peek = function() {
+    return this[this.length-1];
+  }
+
+function detectBrowser() {
+  var useragent = navigator.userAgent;
+  var mapdiv = document.getElementById("map-canvas");
+  var messages = document.getElementById("map-canvas");
+
+  if (useragent.indexOf('iPhone') != -1 || useragent.indexOf('Android') != -1 ) {
+    mapdiv.style.width = '100%';
+    mapdiv.style.height = '100%';
+  } else {
+    mapdiv.style.width = '600px';
+    mapdiv.style.height = '600px';
+    document.getElementById("panel").style.left = '350px';
+  }
+}
+
+var geocoder;
+var map;
+var directionsDisplay;
+var destination;
+var destinationMarker;
+
+var steps = null;
+
+var CircleBuffer = function (buffer) {
+  var circle_index = 0;
+  var circle = buffer;
+  var circles = 0;
+  this.next = function () {
+      if (circle_index >= circle.length) {
+        circle_index = 0;
+        circles++;
+      }
+      return circle[circle_index++];
+  };
+  this.hasNext = function () {
+    return circles <= 1;
+  };
+}
+
+var circle_buffer = new CircleBuffer([{lat:-0.001,lng:0},{lat:0,lng:0.001},{lat:0.001,lng:0},{lat:0,lng:-0.001}]);
+
+var carMarker = new google.maps.Marker({
+    position: stl,
+    // animation: google.maps.Animation.DROP,
+    icon: {
+      size: new google.maps.Size(32, 37),
+      scaledSize: new google.maps.Size(32, 37),
+      url: 'images/fourbyfour.png'
+    },
+});
+
+var stl = new google.maps.LatLng(38.6322,-90.3705);
+var directionsService = new google.maps.DirectionsService();
+
+
+function doWork() {
+  var step = steps.shift();
+  if (step) {
+    calcRoute(step.start_location, destination);
+  } else if (circle_buffer.hasNext()) {
+    calcRoute(latLongCalc(circle_buffer.next()), destination);
+  } else {
+    stopWork();
+  }
+}
+
+function latLongCalc(calc) {
+  return new google.maps.LatLng(destination.lat()+calc.lat,destination.lng()+calc.lng);
+}
+
+function stopWork() {
+  window.clearInterval(intervalWorker);
+  carMarker.setMap(null);
+  directionsDisplay.setMap(null);
+  destinationMarker.setMap(null);
+  $("#map-canvas").animate({opacity:0.3},1000);
+  $("#panel").hide();
+  $("#message").width($("#map-canvas").width());
+  $("#message").show().animate({top: "40%", width:$("#map-canvas").width}, 2000);
+}
+
+function initialize() {
+    detectBrowser();
+    directionsDisplay = new google.maps.DirectionsRenderer({suppressMarkers:true});
+    geocoder = new google.maps.Geocoder();
+    var mapOptions = {
+      zoom: 15,
+      maxZoom: 17,
+      draggable: false,
+      disableDoubleClickZoom: true,
+      scrollwheel: false,
+      disableDefaultUI: true,
+      center: stl
+    }
+    map = new google.maps.Map(document.getElementById('map-canvas'), mapOptions);
+    directionsDisplay.setMap(map);
+}
+var intervalWorker;
+$( "#map-canvas" ).on( "address:route", function( event) {
+  intervalWorker = setInterval(function(){ doWork() }, 2000);
+});
+
+
+function codeAddress() {
+  var address = document.getElementById("address").value;
+  client.addEvent("map-request", {"address":address});
+  geocoder.geocode( { 'address': address}, function(results, status) {
+    if (status == google.maps.GeocoderStatus.OK) {
+      $("#panel").hide();
+      destination = results[0].geometry.location;
+      client.addEvent("map-geocode", {"address":address,"latlng":destination});
+      map.setCenter(destination);
+      destinationMarker = new google.maps.Marker({
+          map: map,
+          position: destination,
+          // icon: {
+          //   size: new google.maps.Size(31, 72),
+          //   scaledSize: new google.maps.Size(16, 36),
+          //   // url: 'images/dot.png'
+          // },
+      });
+
+      calcRoute(getRandomLatLong(), destination);
+
+    } else {
+      alert("Geocode was not successful for the following reason: " + status);
+    }
+  });
+}
+
+function calcRoute(start, end) {
+  console.log("calc route: "+start+"; "+end);
+  var request = {
+    origin:start,
+    destination:end,
+    travelMode: google.maps.TravelMode.DRIVING
+  };
+  directionsService.route(request, function(result, status) {
+    if (status == google.maps.DirectionsStatus.OK) {
+      leg = result.routes[0].legs[0];
+      carMarker.setPosition(leg.start_location);
+      // carMarker.setAnimation(google.maps.Animation.DROP),
+      carMarker.setMap(map);
+      directionsDisplay.setDirections(result);
+
+      if (steps == null)  {
+        steps = leg.steps;
+        steps = steps.slice(1,steps.length);
+        $('#map-canvas').trigger("address:route");
+      }
+    }
+  });
+
+}
+
+function getRandomLatLong() {
+  return new google.maps.LatLng(destination.lat()+getRandomDecimal(),destination.lng()+getRandomDecimal());
+}
+
+function getRandomDecimal() {
+  var min = 0.001;
+  var max = 0.01;
+  var dec = Math.random() * (max - min) + min;
+  return getRandomBoolean() ? dec : dec;
+}
+
+function getRandomBoolean() {
+  var min = 0;
+  var max = 1;
+  var r = Math.floor(Math.random() * (max - min + 1)) + min;
+  return new Boolean(r);
+}
+
+google.maps.event.addDomListener(window, 'load', initialize);
+
+  </script>
+
+  </body>
+</html>
