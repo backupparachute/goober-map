@@ -117,6 +117,16 @@
     var chart = new google.visualization.GeoChart(document.getElementById('regions_div'));
 
     chart.draw(data, options);
+
+    google.visualization.events.addListener(window, 'resize', function() {
+    // google.maps.event.addDomListener(window, "resize", function() {
+      // var center = map.getCenter();
+      // google.maps.event.trigger(chart, "resize");
+      // map.setCenter(center);
+
+          chart.draw(data, options);
+    });
+
   }
   </script>
 
