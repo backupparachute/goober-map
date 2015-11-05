@@ -76,7 +76,7 @@
       margin:0;
       z-index: 1;
     }
-    #regions_div {border: 1px solid #ddd;}
+    body { background-color: #DDD; }
     </style>
 
   </head>
@@ -105,8 +105,9 @@
     var options = {
      // region: '002', // Africa
       colorAxis: {colors: ['#27ae60']},
-      backgroundColor: '#81d4fa',
-      markerOpacity: '0.5',
+      // backgroundColor: '#81d4fa',
+      backgroundColor: { fill:'transparent' },
+      // markerOpacity: '0.5',
       // backgroundColor.fill: 'blue',
       //datalessRegionColor: '#f8bbd0',
       defaultColor: '#bdc3c7',
