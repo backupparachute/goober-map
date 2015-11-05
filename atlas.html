@@ -124,7 +124,9 @@
       // google.maps.event.trigger(chart, "resize");
       // map.setCenter(center);
 
-          chart.draw(data, options);
+      console.log("reSIZE....");
+      google.visualization.event.trigger(chart, "resize");
+          // chart.draw(data, options);
     });
 
   }
